@@ -55,10 +55,10 @@ group <- apply(all_sq_dist, 1, function(x) {
 # Debug: Check ancestry assignments
 print(table(group, exclude = NULL))
 
-# 📌 Merge ancestry assignment with `eid`
+# Merge ancestry assignment with `eid`
 PC_UKBB$Ancestry <- group
 
-# 📌 Save structured output for downstream analysis
+# Save structured output for downstream analysis
 output_file <- "/rds/project/rds-RtePkTecWB4/projects/P7439/mphil/ris30/ancestry_assigned.tsv"
 write.table(PC_UKBB, output_file, sep = "\t", quote = FALSE, row.names = FALSE)
 
