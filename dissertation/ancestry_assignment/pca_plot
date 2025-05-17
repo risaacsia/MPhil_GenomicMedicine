@@ -1,0 +1,77 @@
+library(bigreadr)
+library(ggplot2)
+library(patchwork)
+
+# Load PCA Data (Including "eid" for Merging)
+PC_UKBB <- bigreadr::fread2(
+  "/rds/project/rds-RtePkTecWB4/genetics/P7439/post_qc_data/imputed/reference_files/ukb_sqc_v2.txt",
+  select = c("eid", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6", "PC7", "PC8",
+             "PC9", "PC10", "PC11", "PC12", "PC13", "PC14", "PC15", "PC16")
+)
+
+# Debug: Check PCA data structure
+print(dim(PC_UKBB))  # Should be (488377, 17) including "eid"
+print(head(PC_UKBB))  # Verify columns
+
+# Load Ancestry Assignments (Must Contain "eid" and "group")
+ancestry_file <- "/rds/project/rds-RtePkTecWB4/projects/P7439/mphil/ris30/ancestry_assigned.txt"
+
+# Read ancestry data
+ancestry_data <- read.table(ancestry_file, header = TRUE, stringsAsFactors = FALSE, sep = "\t")
+
+# Keep only `eid` and `Ancestry` columns from ancestry_data
+ancestry_data <- ancestry_data[, c("eid", "Ancestry")]
+
+# Debug: Check fixed ancestry_data structure
+print(dim(ancestry_data))  # Should now be (488377, 2)
+print(head(ancestry_data))  # Should show only `eid` and `Ancestry`
+
+# Merge PCA Data with Ancestry Data Using "eid"
+merged_data <- merge(PC_UKBB, ancestry_data, by = "eid", all.x = TRUE)
+
+# Keep only "eid", "PC1" to "PC16", and "Ancestry"
+expected_columns <- c("eid", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6", "PC7", "PC8",
+                      "PC9", "PC10", "PC11", "PC12", "PC13", "PC14", "PC15", "PC16", "Ancestry")
+
+merged_data <- merged_data[, expected_columns, drop = FALSE]
+
+# Debug: Check final structure
+print(colnames(merged_data))
+
+# Debug: Verify Merge Success
+print(dim(merged_data))  # Should be (488377, 18)
+print(head(merged_data))  # Check if "group" was added
+print(table(merged_data$Ancestry, exclude = NULL))  # Verify counts
+
+# Generate PCA Plot with Correct Ancestry Colors
+# PCA1 vs PCA2
+p1 <- ggplot(merged_data, aes(x = PC1, y = PC2, color = Ancestry)) +
+  geom_point(alpha = 0.6, size = 1) +
+  labs(title = "PCA1 vs PCA2 Plot of UK Biobank Participants", x = "PC1", y = "PC2", color = "Ancestry") +
+  theme_minimal()
+
+# PCA3 vs PCA4
+p2 <- ggplot(merged_data, aes(x = PC3, y = PC4, color = Ancestry)) +
+  geom_point(alpha = 0.6, size = 1) +
+  labs(title = "PC3 vs PC4 Plot of UK Biobank Participants", x = "PC3", y = "PC4", color = "Ancestry") +
+  theme_minimal()
+
+# PCA5 vs PCA6
+p3 <- ggplot(merged_data, aes(x = PC5, y = PC6, color = Ancestry)) +
+  geom_point(alpha = 0.6, size = 1) +
+  labs(title = "PC5 vs PC6 Plot of UK Biobank Participants", x = "PC5", y = "PC6", color = "Ancestry") +
+  theme_minimal()
+
+# PCA7 vs PCA8
+p4 <- ggplot(merged_data, aes(x = PC7, y = PC8, color = Ancestry)) +
+  geom_point(alpha = 0.6, size = 1) +
+  labs(title = "PC7 vs PC8 Plot of UK Biobank Participants", x = "PC7", y = "PC8", color = "Ancestry") +
+  theme_minimal()
+
+# Arrange the plots in a 2x2 grid
+final_plot <- (p1 | p2) / (p3 | p4)
+
+# Print the final plot
+print(final_plot)
+
+ggsave("/rds/project/rds-RtePkTecWB4/projects/P7439/mphil/ris30/PCA_plots.pdf", plot = final_plot, width = 12, height = 10)
