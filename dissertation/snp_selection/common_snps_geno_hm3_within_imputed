@@ -1,0 +1,45 @@
+#!/bin/bash
+#SBATCH --job-name=snp_matching
+#SBATCH --output=snp_matching.out
+#SBATCH --error=snp_matching.err
+#SBATCH --time=02:00:00
+#SBATCH --mem=16G
+#SBATCH --cpus-per-task=4
+#SBATCH --partition=icelake
+
+# Load necessary modules
+module load plink
+
+# Define directories
+IMPUTED_DIR="/rds/project/rds-RtePkTecWB4/genetics/COMMON/post_qc_data/imputed/HRC_UK10K/plink_format/GRCh37/bed/"
+GENOTYPE_DIR="/rds/project/rds-RtePkTecWB4/genetics/COMMON/pre_qc_data/affy_ukbiobank_array/qc_steps/QC/QC/2_rename_variants/"
+HAPMAP_FILE="hapmap3_r1_b37_fwd_consensus.qc.poly.recode.bim"
+OUTPUT_DIR="snp_matching_results"
+
+# Create output directory if it doesn't exist
+mkdir -p $OUTPUT_DIR
+
+echo "Extracting and sorting HapMap3 SNPs..."
+# Extract HapMap3 SNPs (Chromosome, Position, Allele1, Allele2, RSID), ensuring A/B = B/A consistency
+awk '{if ($5 < $6) print $1, $4, $5, $6, $2; else print $1, $4, $6, $5, $2}' $HAPMAP_FILE | LC_ALL=C sort -k1,1n -k2,2n -k3,3 -k4,4 > $OUTPUT_DIR/hapmap3_sorted.txt
+
+echo "Extracting and sorting Genotype Data SNPs..."
+# Extract Genotype SNPs (Chromosome, Position, Allele1, Allele2)
+awk '{if ($5 < $6) print $1, $4, $5, $6; else print $1, $4, $6, $5}' ${GENOTYPE_DIR}/ukbiobank_500K_raw_renamed.bim | LC_ALL=C sort -k1,1n -k2,2n -k3,3 -k4,4 > $OUTPUT_DIR/genotype_sorted.txt
+
+# Join (Union) of HapMap3 and Genotype Data
+echo "Joining HapMap3 and Genotype Data..."
+cat $OUTPUT_DIR/hapmap3_sorted.txt $OUTPUT_DIR/genotype_sorted.txt | sort -u -k1,1n -k2,2n -k3,3 -k4,4 > $OUTPUT_DIR/union_hapmap3_genotype.txt
+
+echo "Extracting and sorting Imputed SNPs..."
+for CHR in {1..22}; do
+    awk '{if ($5 < $6) print $1, $4, $5, $6; else print $1, $4, $6, $5}' ${IMPUTED_DIR}/ukb_imp_v3_dedup_chr${CHR}.bim | LC_ALL=C sort -k1,1n -k2,2n -k3,3 -k4,4 > $OUTPUT_DIR/imputed_chr${CHR}_sorted.txt
+
+    echo "Finding SNPs in Imputed Data for Chromosome ${CHR}..."
+    awk '
+    NR==FNR {a[$1, $2, $3, $4]=1; a[$1, $2, $4, $3]=1; next} 
+    ($1, $2, $3, $4) in a || ($1, $2, $4, $3) in a {print $0}
+    ' $OUTPUT_DIR/union_hapmap3_genotype.txt $OUTPUT_DIR/imputed_chr${CHR}_sorted.txt > $OUTPUT_DIR/final_matched_chr${CHR}.txt
+done
+
+echo "SNP matching completed. Results saved in $OUTPUT_DIR/"
